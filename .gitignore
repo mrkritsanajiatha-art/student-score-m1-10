@@ -1,0 +1,10 @@
+# OS / editor
+Thumbs.db
+.DS_Store
+
+# local preview config (ไม่จำเป็นต่อการ deploy)
+.claude/
+
+# temp
+.remote-backup/
+*.log
