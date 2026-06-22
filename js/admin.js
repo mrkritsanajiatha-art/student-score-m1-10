@@ -210,7 +210,10 @@ let selectedChange = 0;
 
 async function openScoreDialog(id) {
   const res = await API.student(id);
-  if (!res.success) return toastError('ไม่พบนักเรียน');
+  if (!res.success) {
+    if (res.error === 'rate_limited') return toastError('ระบบจำกัดคำขอชั่วคราว รอสักครู่แล้วลองใหม่');
+    return toastError('ไม่พบนักเรียน');
+  }
   const s = res.student;
   selectedChange = 0;
 

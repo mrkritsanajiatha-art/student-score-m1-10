@@ -30,7 +30,7 @@ const DEFAULT_SCORE = 100; // คะแนนเริ่มต้น
 
 // Token / ความปลอดภัย
 const TOKEN_TTL_SEC = 2 * 60 * 60;     // อายุ Token = 2 ชั่วโมง
-const RATE_LIMIT_MAX = 60;             // จำนวนคำขอสูงสุดต่อ 1 นาที (ต่อ IP/Token)
+const RATE_LIMIT_MAX = 120;            // คำขอสูงสุดต่อ 1 นาที (ต่อผู้ใช้ ต่อ action)
 const CACHE_STUDENTS_SEC = 25;         // แคชรายชื่อนักเรียน (วินาที)
 
 // ลำดับคอลัมน์ใน Sheet1 (เริ่มที่ 1)
@@ -44,7 +44,7 @@ const COL = { NO: 1, SID: 2, NAME: 3, SCORE: 4, QR: 5 };
 function doGet(e) {
   try {
     const action = String((e.parameter && e.parameter.action) || '').toLowerCase();
-    if (!checkRateLimit_(e)) return json_({ success: false, error: 'rate_limited' });
+    if (!checkRateLimit_(e, action, e.parameter && e.parameter.token)) return json_({ success: false, error: 'rate_limited' });
 
     switch (action) {
       case 'students':    return json_(getStudents_());
@@ -64,9 +64,9 @@ function doGet(e) {
 /** รับคำขอแบบ POST (สำหรับการเขียน/แก้ไขข้อมูล) */
 function doPost(e) {
   try {
-    if (!checkRateLimit_(e)) return json_({ success: false, error: 'rate_limited' });
     const body = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
     const action = String(body.action || '').toLowerCase();
+    if (!checkRateLimit_(e, action, body.token)) return json_({ success: false, error: 'rate_limited' });
 
     switch (action) {
       case 'login':       return json_(login_(body));
@@ -413,14 +413,22 @@ function formatDate_(d) {
 
 function now_() { return formatDate_(new Date()); }
 
-/** จำกัดอัตราการเรียก (Rate Limiting) แบบง่ายต่อ 1 นาที */
-function checkRateLimit_(e) {
+/**
+ * จำกัดอัตราการเรียก (Rate Limiting) แบบ fixed-window ราย 1 นาที
+ * - ใช้ "bucket รายนาที" เป็นส่วนหนึ่งของ key -> key เปลี่ยนเองทุกนาที
+ *   จึงรีเซ็ตอัตโนมัติ ไม่สะสมข้ามนาที (แก้บั๊กตัวนับค้างจนสแกน/ให้คะแนนไม่ได้)
+ * - แยกโควต้าตามผู้เรียกแต่ละราย (token ของแอดมิน) และแยกตาม action
+ *   ผู้ดูแลที่ล็อกอินจึงไม่ไปแย่งโควต้ากับการค้นหาสาธารณะหน้าเว็บ
+ */
+function checkRateLimit_(e, action, token) {
   try {
     const cache = CacheService.getScriptCache();
-    // ใช้ token หรือ action เป็น key (Apps Script ไม่ส่ง IP มาให้)
-    const key = 'rl_' + ((e.parameter && e.parameter.action) || 'post');
+    const minuteBucket = Math.floor(Date.now() / 60000);          // เปลี่ยนทุก 60 วินาที
+    const who = token ? ('t' + String(token).slice(0, 12)) : 'public';
+    const act = action || (e && e.parameter && e.parameter.action) || 'post';
+    const key = 'rl_' + who + '_' + act + '_' + minuteBucket;
     const count = Number(cache.get(key) || 0) + 1;
-    cache.put(key, String(count), 60);
+    cache.put(key, String(count), 120);                           // พอครอบคลุมนาทีปัจจุบัน แล้วหมดอายุเอง
     return count <= RATE_LIMIT_MAX;
   } catch (err) {
     return true; // หากเกิดข้อผิดพลาด ไม่บล็อกผู้ใช้
