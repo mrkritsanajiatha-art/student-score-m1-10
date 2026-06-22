@@ -16,6 +16,8 @@ window.addEventListener('DOMContentLoaded', async function () {
     toastError('โหลดข้อมูลไม่สำเร็จ');
   }
 
+  renderRoster(); // แสดงรายชื่อนักเรียนทั้งหมดให้กดเลือกได้
+
   // ค้นหาแบบเรียลไทม์
   const input = document.getElementById('searchInput');
   input.addEventListener('input', doSearch);
@@ -37,7 +39,7 @@ function doSearch() {
   }).slice(0, 12);
 
   if (!matches.length) {
-    box.innerHTML = '<p class="text-soft mb-0 mt-2">ไม่พบนักเรียนที่ค้นหา</p>';
+    box.innerHTML = '<div class="empty-state"><span class="empty-emoji">😔</span>ไม่พบข้อมูลนักเรียน ลองพิมพ์ใหม่อีกครั้งนะ</div>';
     return;
   }
 
@@ -49,6 +51,23 @@ function doSearch() {
       '</div>' +
       '<div class="lb-score" style="color:' + scoreColor(s.score) + '">' + s.score + '</div>' +
     '</div>';
+  }).join('');
+}
+
+/** แสดงรายชื่อนักเรียนทั้งหมด (เรียงตามเลขที่) ให้กดเลือกได้โดยไม่ต้องค้นหา */
+function renderRoster() {
+  const box = document.getElementById('studentRoster');
+  if (!box) return;
+  if (!ALL_STUDENTS.length) {
+    box.innerHTML = '<p class="text-soft mb-0">ยังไม่มีรายชื่อนักเรียน</p>';
+    return;
+  }
+  const list = ALL_STUDENTS.slice().sort(function (a, b) { return Number(a.no) - Number(b.no); });
+  box.innerHTML = list.map(function (s) {
+    return '<button type="button" class="roster-item" onclick="showStudent(\'' + s.studentId + '\')">' +
+      '<span class="roster-no">' + escapeHtml(s.no) + '</span>' +
+      '<span class="roster-name">' + escapeHtml(s.name) + '</span>' +
+    '</button>';
   }).join('');
 }
 
